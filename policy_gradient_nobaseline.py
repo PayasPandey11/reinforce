@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib.pyplot as plt
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,13 +15,14 @@ class Policy(nn.Module):
         super().__init__()
 
         self.model = nn.Sequential(
-            nn.Linear(input_shape, 128),
+            nn.Linear(input_shape, 32),
             nn.ReLU(),
-            nn.Linear(128, 64),
+            nn.Linear(32, 16),
             nn.ReLU(),
-            nn.Linear(64, output_shape),
+            nn.Linear(16, output_shape),
             nn.Softmax(dim=1),
         )
+        # self.apply(init_weights)
 
     def forward(self, x):
         return self.model(x)
@@ -43,7 +46,21 @@ def init_weights(m):
         m.bias.data.fill_(0.01)
 
 
-def apply_reinforce(num_episodes=100, gamma=1):
+def discount_rewards(rewards, gamma):
+    discounted_rewards = [gamma ** i * rewards[i] for i in range(len(rewards))]
+    return discounted_rewards
+
+
+def normalise_rewards(rewards):
+    rewards_mean = rewards.mean()
+    rewards_std = rewards.std()
+    rewards_norm = [
+        (rewards[i] - rewards_mean) / (rewards_std + 1e-10) for i in range(len(rewards))
+    ]
+    return rewards_norm
+
+
+def apply_reinforce(num_episodes=100, gamma=0.99):
 
     scores = []
     best_score = -1000
@@ -61,7 +78,7 @@ def apply_reinforce(num_episodes=100, gamma=1):
             saved_log_probs.append(log_prob)
             state, reward, done, _ = env.step(action)
             rewards.append(reward)
-            time_step += 11
+            time_step += 1
 
             if done:
 
@@ -69,25 +86,25 @@ def apply_reinforce(num_episodes=100, gamma=1):
                 # print(f"Done with total reward {total_reward} at time step {time_step}")
                 scores.append(total_reward)
 
-                discounted_R = sum(
-                    [gamma ** i * rewards[i] for i in range(len(rewards))]
-                )
-                # print(rewards, R)
+                discounted_rewards = discount_rewards(rewards, gamma)
+                norm_rewards = normalise_rewards(np.asarray(discounted_rewards))
+                discounted_R = sum(discounted_rewards)
 
                 policy_loss = []
-                for log_prob in saved_log_probs:
-                    policy_loss.append(-log_prob * discounted_R)
+                for log_prob, reward in zip(saved_log_probs, norm_rewards):
+                    policy_loss.append(-log_prob * reward)
                 # print(f"\n policy_loss {policy_loss}")
-                total_policy_loss = torch.cat(policy_loss).sum()
+                total_policy_loss = torch.cat(policy_loss).mean()
                 # print(f"\n total_policy_loss {total_policy_loss}")
 
                 optimizer.zero_grad()
                 total_policy_loss.backward()
                 optimizer.step()
 
-                if episode_i % (num_episodes / 100) == 0 or episode_i == 1:
+                if episode_i % (num_episodes / 10) == 0 or episode_i == 1:
                     print(
-                        f"Episode - > {episode_i}  Score -> {total_reward} best score ->   {best_score}  "
+                        f" Episode - > {episode_i}  Score -> {total_reward} best score ->   {best_score}",
+                        end="\n",
                     )
 
                 if total_reward > best_score:
@@ -96,6 +113,7 @@ def apply_reinforce(num_episodes=100, gamma=1):
                     )
                     best_score = total_reward
                     torch.save(policy, model_path)
+    return scores
 
 
 def test_policy():
@@ -119,26 +137,35 @@ def test_policy():
 
 
 if __name__ == "__main__":
-    env_name = "CartPole-v1"
+    env_name = "CartPole-v0"
     model_path = f"models/{env_name}_policygrad"
     env = gym.make(env_name)
     env.seed(0)
-    env = wrappers.Monitor(
-        env,
-        f"Saved_Videos/policy_grad/reinforce/{env_name}",
-        resume=True,
-        force=True,
-        video_callable=lambda episode_id: episode_id % 100 == 0,
-    )
+
+    # env = wrappers.Monitor(
+    #     env,
+    #     f"Saved_Videos/policy_grad/reinforce/{env_name}",
+    #     resume=True,
+    #     force=True,
+    #     video_callable=lambda episode_id: episode_id % 100 == 0,
+    # )
 
     device = "cpu"
     obs_shape = env.observation_space.shape
     action_shape = env.action_space
     print(obs_shape, action_shape)
     policy = Policy(4, 2)
-    policy.apply(init_weights)
     print(policy)
-    optimizer = optim.Adam(policy.parameters(), lr=1e-2)
+    optimizer = optim.Adam(policy.parameters(), lr=0.001)
 
-    apply_reinforce(1000, 0.99)
+    rewards = apply_reinforce(2000, 0.99)
+
+    smoothed_rewards = [
+        np.mean(rewards[max(0, i - 10) : i + 1]) for i in range(len(rewards))
+    ]
+
     test_policy()
+    plt.figure(figsize=(12, 8))
+    plt.plot(smoothed_rewards)
+    plt.title(f"Policy Estimation with REINFORCE  for {env_name}")
+    plt.show()
