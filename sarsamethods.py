@@ -33,11 +33,11 @@ def td_methods(num_eps=1000, max_steps=100, method="sarsa"):
     epsilon = 0.9
     total_rewards = []
 
-    for episode_idx, episode in enumerate(range(1, num_eps)):
+    for episode_idx in range(1, num_eps):
         state = env.reset()
         done = False
         step = 0
-        episode_scores = []
+        episode_scores = 0
         while not done:
 
             eps_greedy_action = random.uniform(0, 1)
@@ -45,14 +45,16 @@ def td_methods(num_eps=1000, max_steps=100, method="sarsa"):
             if eps_greedy_action > epsilon:
                 # print("picking action from q table")
                 action = np.argmax(q_table[state, :])
+
             else:
                 # print("pick random action")
                 action = env.action_space.sample()
+                print(action)
 
-                action = env.action_space.sample()
             # env.render()
 
             next_state, reward, done, _ = env.step(action)
+            episode_scores += reward
 
             if method == "sarsa":
                 q_table = update_sarsa_qtable(
@@ -68,14 +70,13 @@ def td_methods(num_eps=1000, max_steps=100, method="sarsa"):
             step += 1
 
             state = next_state
-            episode_scores.append(reward)
 
             if step > max_steps or done:
-                print(f"Score of the {episode_idx} episode --> {sum(episode_scores)} ")
+                print(f"Score of the {episode_idx} episode --> {episode_scores} ")
                 epsilon = min_epsilon + (1 - min_epsilon) * np.exp(
                     -decay_rate * episode_idx
                 )
-                total_rewards.append(sum(episode_scores))
+                total_rewards.append(episode_scores)
                 break
     return q_table, total_rewards
 
@@ -126,7 +127,7 @@ def analyse_and_test(
 
 if __name__ == "__main__":
 
-    env = gym.make("Taxi-v2")
+    env = gym.make("FrozenLake-v0")
     action_size = env.action_space.n
     print("Action size ", action_size)
 
@@ -134,18 +135,19 @@ if __name__ == "__main__":
     print("State size ", state_size)
 
     min_epsilon = 0.01
-    learning_rate = 0.7  # Learning rate
-    gamma = 0.9  # Discounting rate
-    decay_rate = 0.03
-
-    sarsa_q_table, total_rewards_sarsa = td_methods(
-        num_eps=10000, max_steps=100, method="sarsa"
-    )
+    learning_rate = 0.1  # Learning rate
+    gamma = 0.99  # Discounting rate
+    decay_rate = 0.003
+    num_episode = 50000
+    # sarsa_q_table, total_rewards_sarsa = td_methods(
+    #     num_eps=num_episode, max_steps=100, method="sarsa"
+    # )
     qlearning_q_table, total_rewards_qlearning = td_methods(
-        num_eps=10000, max_steps=100, method="qlearning"
+        num_eps=num_episode, max_steps=100, method="qlearning"
     )
+    print(sum(total_rewards_qlearning) / len(total_rewards_qlearning))
 
-    analyse_and_test(
-        sarsa_q_table, total_rewards_sarsa, qlearning_q_table, total_rewards_qlearning
-    )
+    # analyse_and_test(
+    #     sarsa_q_table, total_rewards_sarsa, qlearning_q_table, total_rewards_qlearning
+    # )
 
