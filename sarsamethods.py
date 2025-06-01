@@ -10,6 +10,7 @@ np.set_printoptions(suppress=True)
 
 
 def update_sarsa_qtable(env, state, action, reward, next_state, q_table):
+    "sarsa implementation"
 
     next_action = np.argmax(q_table[next_state, :])
     q_t = q_table[state, action]
