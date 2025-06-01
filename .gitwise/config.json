@@ -1,0 +1,5 @@
+{
+  "llm_backend": "online",
+  "openrouter_api_key": "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",
+  "openrouter_model": "anthropic/claude-3.7-sonnet"
+}
